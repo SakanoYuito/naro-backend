@@ -24,29 +24,29 @@ type User struct {
 }
 
 type City struct {
-	ID          int    `json:"id,omitempty"  db:"ID"`
-	Name        string `json:"name,omitempty"  db:"Name"`
-	CountryCode string `json:"countryCode,omitempty"  db:"CountryCode"`
-	District    string `json:"district,omitempty"  db:"District"`
-	Population  int    `json:"population,omitempty"  db:"Population"`
+	ID          int            `json:"id,omitempty"  db:"ID"`
+	Name        string         `json:"name,omitempty"  db:"Name"`
+	CountryCode sql.NullString `json:"countryCode,omitempty"  db:"CountryCode"`
+	District    string         `json:"district,omitempty"  db:"District"`
+	Population  sql.NullInt32  `json:"population,omitempty"  db:"Population"`
 }
 
 type Country struct {
-	Code           string  `json:"code,omitempty"   db:"Code"`
-	Name           string  `json:"name,omitempty"  db:"Name"`
-	Continent      string  `json:"continent,omitempty"  db:"Continent"`
-	Region         string  `json:"region,omitempty"  db:"Region"`
-	SurfaceArea    float64 `json:"surfaceArea,omitempty"  db:"SurfaceArea"`
-	IndepYear      sql.NullInt32     `json:"indepYear,omitempty"  db:"IndepYear"`
-	Population     int     `json:"population,omitempty"  db:"Population"`
+	Code           string          `json:"code,omitempty"   db:"Code"`
+	Name           string          `json:"name,omitempty"  db:"Name"`
+	Continent      string          `json:"continent,omitempty"  db:"Continent"`
+	Region         string          `json:"region,omitempty"  db:"Region"`
+	SurfaceArea    float64         `json:"surfaceArea,omitempty"  db:"SurfaceArea"`
+	IndepYear      sql.NullInt32   `json:"indepYear,omitempty"  db:"IndepYear"`
+	Population     int             `json:"population,omitempty"  db:"Population"`
 	LifeExpectancy sql.NullFloat64 `json:"lifeExpectancy,omitempty"  db:"LifeExpectancy"`
 	GNP            sql.NullFloat64 `json:"gnp,omitempty"  db:"GNP"`
 	GNPOld         sql.NullFloat64 `json:"gnpOld,omitempty"  db:"GNPOld"`
-	LocalName      string  `json:"localName,omitempty"  db:"LocalName"`
-	GovernmentForm string  `json:"governmentForm,omitempty"  db:"GovernmentForm"`
+	LocalName      string          `json:"localName,omitempty"  db:"LocalName"`
+	GovernmentForm string          `json:"governmentForm,omitempty"  db:"GovernmentForm"`
 	HeadOfState    sql.NullString  `json:"headOfState,omitempty"  db:"HeadOfState"`
-	Capital        sql.NullInt32     `json:"capital,omitempty"  db:"Capital"`
-	Code2          string  `json:"code2,omitempty"  db:"Code2"`
+	Capital        sql.NullInt32   `json:"capital,omitempty"  db:"Capital"`
+	Code2          string          `json:"code2,omitempty"  db:"Code2"`
 }
 
 func getCityInfoHandler(c echo.Context) error {
@@ -99,7 +99,7 @@ func getCitiesByCountryHandler(c echo.Context) error {
 	var cities []City
 	countryName := c.Param("countryName")
 	var CC string
-	if err := db.Get(&CC, "SELECT Code FROM country WHERE Name=?", countryName); errors.Is(err, sql.ErrNoRows){
+	if err := db.Get(&CC, "SELECT Code FROM country WHERE Name=?", countryName); errors.Is(err, sql.ErrNoRows) {
 		return echo.NewHTTPError(http.StatusNotFound, fmt.Sprintf("No such country Name = %s", countryName))
 	} else if err != nil {
 		log.Fatalf("DB Error: %s", err)
@@ -155,9 +155,9 @@ func changeCityInfoHandler(c echo.Context) error {
 			log.Fatalf("DB Error: %s", err)
 		}
 	}
-	if city.CountryCode != "" {
+	if city.CountryCode.String != "" {
 		_, err = db.Exec("UPDATE city SET CountryCode = ? WHERE ID = ?;", city.CountryCode, city.ID)
-		fmt.Printf("updated CountryCode : %s -> %s\n", cityBefore.CountryCode, city.CountryCode)
+		fmt.Printf("updated CountryCode : %s -> %s\n", cityBefore.CountryCode.String, city.CountryCode.String)
 		if err != nil {
 			log.Fatalf("DB Error: %s", err)
 		}
@@ -169,9 +169,9 @@ func changeCityInfoHandler(c echo.Context) error {
 			log.Fatalf("DB Error: %s", err)
 		}
 	}
-	if city.Population != 0 {
+	if city.Population.Int32 != 0 {
 		_, err = db.Exec("UPDATE city SET Population = ? WHERE ID = ?;", city.Population, city.ID)
-		fmt.Printf("updated Name : %d -> %d\n", cityBefore.Population, city.Population)
+		fmt.Printf("updated Name : %d -> %d\n", cityBefore.Population.Int32, city.Population.Int32)
 		if err != nil {
 			log.Fatalf("DB Error: %s", err)
 		}
@@ -281,9 +281,23 @@ func userAuthMiddleware(next echo.HandlerFunc) echo.HandlerFunc {
 	}
 }
 
-
 func getWhoAmIHandler(c echo.Context) error {
 	return c.JSON(http.StatusOK, struct{ Username string }{
 		Username: c.Get("userName").(string),
 	})
+}
+
+func populationSum(cities *[]City) map[string]int32 {
+	popsum := map[string]int32{}
+
+	for _, v := range *cities {
+		if v.CountryCode.Valid {
+			_, exists := popsum[v.CountryCode.String]
+			if !exists {
+				popsum[v.CountryCode.String] = 0
+			}
+			popsum[v.CountryCode.String] += v.Population.Int32
+		}
+	}
+	return popsum
 }
